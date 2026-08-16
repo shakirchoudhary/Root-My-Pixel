@@ -7,22 +7,30 @@ This directory contains bundled payload files shipped inside the APK.
 ### profiles.json
 The device profile feed. Maps each supported Pixel firmware to its asset paths.
 
-### explores/*.so
-Pre-compiled exploit payloads (CVE-2026-43499 APP_PAYLOAD variant) for each
-target. Built from the payloads/ directory with:
-```
-make TARGET=frankel-CP2A.260605.012 ANDROID_NDK_HOME=...
-```
+### exploits/*.so
+Exploit payloads (CVE-2026-43499 APP_PAYLOAD variant), one per target. These
+are build outputs, not sources: `build-all.sh` regenerates every entry in its
+TARGETS list from the payloads submodule, and CI runs it before the Gradle
+build, so a new target does not need a binary committed here.
 
-The output `cve-2026-43499-app.release.so` goes into `app/src/main/assets/exploits/<target>.so`.
+To build one by hand:
+```
+make TARGET=tegu-CP2A.260705.006 ANDROID_NDK_HOME=... release
+```
+The resulting `cve-2026-43499-app.release.so` goes to `exploits/<profileId>.so`.
 
-### ksud/*.bin
-ReSukiSU late-load binaries (ksud) for each KMI. Download from official
-ReSukiSU releases and rename to `ksud-android14-6.1`, `ksud-android15-6.6`, etc.
+### ksud/ksud
+The ReSukiSU late-load binary, downloaded from official ReSukiSU releases.
+
+One binary covers every KMI. It embeds a `kernelsu.ko` per KMI
+(`android12-5.10` through `android16-6.12`) and selects between them from the
+`--kmi` it is passed at late-load, which is what a profile's `kmi` field
+supplies. This used to be shipped as one file per KMI; those copies were
+byte-identical, so they were merged into this one.
 
 ## Adding a new target
 
 1. Add the target profile to `profiles.json`
-2. Build the exploit .so for that target via the payloads/ Makefile
-3. Copy the .so to `exploits/<profileId>.so`
-4. Ensure a matching `ksud/<kmi>` binary exists
+2. Add the target to `TARGETS` in `build-all.sh` — CI builds the .so from there
+3. Set the profile's `kmi` to the target's kernel KMI, so late-load picks the
+   right `kernelsu.ko` out of `ksud/ksud`
