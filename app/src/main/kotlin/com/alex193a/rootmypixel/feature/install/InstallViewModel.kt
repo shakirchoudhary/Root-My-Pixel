@@ -19,6 +19,7 @@ import com.alex193a.rootmypixel.domain.usecase.DownloadPayloadsUseCase
 import com.alex193a.rootmypixel.domain.usecase.ResolveTargetUseCase
 import com.alex193a.rootmypixel.shizuku.ExploitService
 import com.alex193a.rootmypixel.shizuku.IExploitService
+import com.alex193a.rootmypixel.shizuku.KernelSuDetector
 import com.alex193a.rootmypixel.utils.NativeProbe
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -83,7 +84,7 @@ class InstallViewModel(application: Application) : AndroidViewModel(application)
             try {
                 val probe = NativeProbe.run()
                 val deviceInfo = NativeProbe.readDeviceSnapshot()
-                if (NativeProbe.isKernelSuActive()) {
+                if (NativeProbe.isKernelSuActive() || KernelSuDetector.isActive(app)) {
                     mutableState.value = InstallUiState(
                         phase = InstallPhase.Installed,
                         message = app.getString(R.string.status_ksu_active),
@@ -435,8 +436,12 @@ class InstallViewModel(application: Application) : AndroidViewModel(application)
 
         // 3. Execute late-load via daemon root
         appendLog("[*] Triggering KernelSU late-load (kmi=${payloads.kmi})...")
-        val lateResult = runHelper(helper, "-c",
-            "$ksudDest late-load --kmi ${payloads.kmi}")
+        val lateResult = runHelper(
+            helper,
+            "-c",
+            "$ksudDest late-load --allow-shell --kmi ${payloads.kmi} " +
+                "--package-name com.resukisu.resukisu",
+        )
         if (lateResult.output.isNotBlank()) {
             appendLog(lateResult.output.take(2000))
         }
@@ -448,7 +453,14 @@ class InstallViewModel(application: Application) : AndroidViewModel(application)
         //    worked. `ksud debug info` goes through the module's own prctl
         //    interface and answers for it; /proc/modules is the backstop.
         var ksuInfo: String? = null
+        // 4. Verify modern fd-based ReSukiSU via its shell su interface.
+        // Keep legacy node checks as a fallback for older KernelSU builds.
+        var ksuActive = KernelSuDetector.isActive(app)
+        if (ksuActive) {
+            appendLog("[+] KernelSU verified through shell su interface")
+        }
         for (i in 1..10) {
+            if (ksuActive) break
             val check = runHelper(helper, "-c",
                 "if $ksudDest debug info 2>/dev/null | grep -qE '^version: [1-9]'; then " +
                 "$ksudDest debug info 2>/dev/null; " +
