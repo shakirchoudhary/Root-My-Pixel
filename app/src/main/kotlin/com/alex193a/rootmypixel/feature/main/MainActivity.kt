@@ -78,14 +78,14 @@ class MainActivity : ComponentActivity() {
             val state by installViewModel.state.collectAsStateWithLifecycle()
             val shizukuAvailable by installViewModel.shizukuAvailable.collectAsStateWithLifecycle()
             val reSukiSuInstalled by installViewModel.reSukiSuInstalled.collectAsStateWithLifecycle()
-            val uptimeExceeded by installViewModel.uptimeExceeded.collectAsStateWithLifecycle()
+            val deviceNotSettled by installViewModel.deviceNotSettled.collectAsStateWithLifecycle()
 
             RootMyPixelTheme {
                 MainScreen(
                     state = state,
                     shizukuAvailable = shizukuAvailable,
                     reSukiSuInstalled = reSukiSuInstalled,
-                    uptimeExceeded = uptimeExceeded,
+                    deviceNotSettled = deviceNotSettled,
                     onRefresh = { installViewModel.refresh() },
                     onInstall = { installViewModel.install() },
                     onExportLog = { installViewModel.exportLog() },
@@ -106,7 +106,7 @@ private fun MainScreen(
     state: InstallUiState,
     shizukuAvailable: Boolean,
     reSukiSuInstalled: Boolean,
-    uptimeExceeded: Boolean,
+    deviceNotSettled: Boolean,
     onRefresh: () -> Unit,
     onInstall: () -> Unit,
     onExportLog: () -> Unit,
@@ -175,9 +175,9 @@ private fun MainScreen(
             Spacer(modifier = Modifier.height(12.dp))
 
             // Uptime status
-            UptimeErrorCard(exceeded = uptimeExceeded)
+            UptimeErrorCard(exceeded = deviceNotSettled)
 
-            if (uptimeExceeded) {
+            if (deviceNotSettled) {
                 Spacer(modifier = Modifier.height(8.dp))
             }
 

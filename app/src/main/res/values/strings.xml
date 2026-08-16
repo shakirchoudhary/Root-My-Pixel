@@ -77,7 +77,7 @@
     <string name="error_receipt">Cannot persist install receipt</string>
 
     <!-- Uptime warning -->
-    <string name="uptime_error_title">Phone not rebooted</string>
-    <string name="uptime_error_message">The phone hasn\'t been rebooted recently. Rebooting your device before installation is recommended to ensure exploit stability.</string>
+    <string name="uptime_error_title">Expect a reboot</string>
+    <string name="uptime_error_message">Winning this race is a matter of luck, and losing it can panic the kernel and reboot the phone. That is expected and harmless — nothing is written until it succeeds. If it reboots, just try again.</string>
 </resources>
 

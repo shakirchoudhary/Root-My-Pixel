@@ -75,6 +75,6 @@
     <string name="error_receipt">Impossibile salvare la ricevuta di installazione</string>
 
     <!-- Uptime warning -->
-    <string name="uptime_error_title">Telefono non riavviato</string>
-    <string name="uptime_error_message">Il telefono non è stato riavviato di recente. Si consiglia di riavviare il dispositivo prima dell\'installazione per garantire la stabilità dell\'exploit.</string>
+    <string name="uptime_error_title">Aspettati un riavvio</string>
+    <string name="uptime_error_message">Vincere questa corsa è questione di fortuna, e perderla può causare un kernel panic e riavviare il telefono. È previsto e innocuo: non viene scritto nulla finché non riesce. Se si riavvia, riprova.</string>
 </resources>
