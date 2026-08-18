@@ -65,6 +65,7 @@ TARGETS=(
   "tegu-CP2A.260705.006"      # Pixel 9a
   "husky-CP2A.260705.006"     # Pixel 8 Pro
   "shiba-CP2A.260705.006"     # Pixel 8
+  "akita-CP2A.260805.005"     # Pixel 8a
   "lynx-CP2A.260705.006"      # Pixel 7a
   "cheetah-CP2A.260705.006"   # Pixel 7 Pro
   "panther-CP2A.260705.006"   # Pixel 7
