@@ -24,13 +24,16 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Bolt
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.ContentCopy
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.OpenInBrowser
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Shield
 import androidx.compose.material.icons.rounded.Warning
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -41,12 +44,18 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -57,11 +66,13 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.alex193a.rootmypixel.R
+import com.alex193a.rootmypixel.data.ManagerPackageStore
 import com.alex193a.rootmypixel.domain.model.InstallPhase
 import com.alex193a.rootmypixel.domain.model.InstallUiState
 import com.alex193a.rootmypixel.ui.theme.RootMyPixelTheme
@@ -79,6 +90,8 @@ class MainActivity : ComponentActivity() {
             val shizukuAvailable by installViewModel.shizukuAvailable.collectAsStateWithLifecycle()
             val reSukiSuInstalled by installViewModel.reSukiSuInstalled.collectAsStateWithLifecycle()
             val deviceNotSettled by installViewModel.deviceNotSettled.collectAsStateWithLifecycle()
+            val selectedManager by installViewModel.selectedManager.collectAsStateWithLifecycle()
+            val managerCandidates by installViewModel.managerCandidates.collectAsStateWithLifecycle()
 
             RootMyPixelTheme {
                 MainScreen(
@@ -86,9 +99,12 @@ class MainActivity : ComponentActivity() {
                     shizukuAvailable = shizukuAvailable,
                     reSukiSuInstalled = reSukiSuInstalled,
                     deviceNotSettled = deviceNotSettled,
+                    selectedManager = selectedManager,
+                    managerCandidates = managerCandidates,
                     onRefresh = { installViewModel.refresh() },
                     onInstall = { installViewModel.install() },
                     onExportLog = { installViewModel.exportLog() },
+                    onSelectManager = { installViewModel.selectManagerPackage(it) },
                 )
             }
         }
@@ -107,10 +123,26 @@ private fun MainScreen(
     shizukuAvailable: Boolean,
     reSukiSuInstalled: Boolean,
     deviceNotSettled: Boolean,
+    selectedManager: String,
+    managerCandidates: List<ManagerCandidate>,
     onRefresh: () -> Unit,
     onInstall: () -> Unit,
     onExportLog: () -> Unit,
+    onSelectManager: (String) -> Unit,
 ) {
+    var showManagerPicker by remember { mutableStateOf(false) }
+
+    if (showManagerPicker) {
+        ManagerPickerDialog(
+            candidates = managerCandidates,
+            currentPackage = selectedManager,
+            onConfirm = { pkg ->
+                onSelectManager(pkg)
+                showManagerPicker = false
+            },
+            onDismiss = { showManagerPicker = false },
+        )
+    }
     val context = LocalContext.current
 
     @Suppress("DEPRECATION")
@@ -186,7 +218,16 @@ private fun MainScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // ReSukiSU Manager status
+            // Manager package selection
+            ManagerPackageCard(
+                selectedPackage = selectedManager,
+                isInstalled = reSukiSuInstalled,
+                onChangeClick = { showManagerPicker = true },
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // ReSukiSU Manager status (only shown when the selected package isn't installed)
             ReSukiSuManagerCard(
                 installed = reSukiSuInstalled,
                 context = LocalContext.current,
@@ -428,6 +469,175 @@ private fun ReSukiSuManagerCard(installed: Boolean, context: android.content.Con
             }
         }
     }
+}
+
+@Composable
+private fun ManagerPackageCard(
+    selectedPackage: String,
+    isInstalled: Boolean,
+    onChangeClick: () -> Unit,
+) {
+    val isDefault = selectedPackage == ManagerPackageStore.DEFAULT_PACKAGE
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
+        colors = CardDefaults.cardColors(
+            containerColor = if (isInstalled)
+                MaterialTheme.colorScheme.surfaceContainerHighest
+            else
+                MaterialTheme.colorScheme.surfaceContainerHighest,
+        ),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = if (isInstalled) Icons.Rounded.Check else Icons.Rounded.Warning,
+                contentDescription = null,
+                modifier = Modifier.size(20.dp),
+                tint = if (isInstalled)
+                    MaterialTheme.colorScheme.primary
+                else
+                    MaterialTheme.colorScheme.error,
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.manager_card_title),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    text = selectedPackage,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontFamily = FontFamily.Monospace,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (!isInstalled) {
+                    Text(
+                        text = stringResource(R.string.manager_not_found_warning),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            TextButton(onClick = onChangeClick) {
+                Icon(
+                    Icons.Rounded.Edit,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(stringResource(R.string.manager_card_change))
+            }
+        }
+    }
+}
+
+@Composable
+private fun ManagerPickerDialog(
+    candidates: List<ManagerCandidate>,
+    currentPackage: String,
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var selected by remember { mutableStateOf(currentPackage) }
+    var customText by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.manager_picker_title)) },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.manager_picker_subtitle),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+
+                if (candidates.isEmpty()) {
+                    Text(
+                        text = stringResource(R.string.manager_picker_no_candidates),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else {
+                    candidates.forEach { candidate ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { selected = candidate.packageName },
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            RadioButton(
+                                selected = selected == candidate.packageName,
+                                onClick = { selected = candidate.packageName },
+                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = candidate.label,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                Text(
+                                    text = candidate.packageName,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontFamily = FontFamily.Monospace,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+                HorizontalDivider()
+                Spacer(modifier = Modifier.height(4.dp))
+
+                OutlinedTextField(
+                    value = customText,
+                    onValueChange = {
+                        customText = it
+                        if (it.isNotBlank()) selected = it.trim()
+                    },
+                    label = { Text(stringResource(R.string.manager_picker_custom_hint)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    textStyle = MaterialTheme.typography.bodySmall.copy(
+                        fontFamily = FontFamily.Monospace,
+                    ),
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val pkg = if (customText.isNotBlank()) customText.trim() else selected
+                    if (pkg.isNotBlank()) onConfirm(pkg)
+                },
+                enabled = selected.isNotBlank() || customText.isNotBlank(),
+            ) {
+                Text(stringResource(R.string.manager_picker_confirm))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.manager_picker_cancel))
+            }
+        },
+    )
 }
 
 @Composable

@@ -3,6 +3,7 @@ package com.alex193a.rootmypixel.feature.main
 import android.app.Application
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.os.Handler
 import android.os.Looper
@@ -13,6 +14,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.alex193a.rootmypixel.R
 import com.alex193a.rootmypixel.core.Result
+import com.alex193a.rootmypixel.data.ManagerPackageStore
 import com.alex193a.rootmypixel.domain.model.DeviceSnapshot
 import com.alex193a.rootmypixel.domain.model.InstallPhase
 import com.alex193a.rootmypixel.domain.model.InstallUiState
@@ -30,6 +32,11 @@ import org.koin.java.KoinJavaComponent.get
 import rikka.shizuku.Shizuku
 import java.io.File
 
+data class ManagerCandidate(
+    val packageName: String,
+    val label: String,
+)
+
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val app = application
     private val resolveTargetUseCase: ResolveTargetUseCase by lazy {
@@ -40,12 +47,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val mutableShizukuAvailable = MutableStateFlow(false)
     private val mutableReSukiSuInstalled = MutableStateFlow(false)
     private val mutableDeviceNotSettled = MutableStateFlow(false)
+    private val mutableSelectedManager = MutableStateFlow(ManagerPackageStore.selectedPackage)
+    private val mutableManagerCandidates = MutableStateFlow<List<ManagerCandidate>>(emptyList())
     private var refreshJob: Job? = null
 
     val state: StateFlow<InstallUiState> = mutableState.asStateFlow()
     val shizukuAvailable: StateFlow<Boolean> = mutableShizukuAvailable.asStateFlow()
     val reSukiSuInstalled: StateFlow<Boolean> = mutableReSukiSuInstalled.asStateFlow()
     val deviceNotSettled: StateFlow<Boolean> = mutableDeviceNotSettled.asStateFlow()
+    val selectedManager: StateFlow<String> = mutableSelectedManager.asStateFlow()
+    val managerCandidates: StateFlow<List<ManagerCandidate>> = mutableManagerCandidates.asStateFlow()
+
+    fun selectManagerPackage(packageName: String) {
+        ManagerPackageStore.selectedPackage = packageName
+        mutableSelectedManager.value = packageName
+        mutableReSukiSuInstalled.value =
+            app.packageManager.getLaunchIntentForPackage(packageName) != null
+    }
 
 
     private val shizukuPermissionHandler = Handler(Looper.getMainLooper())
@@ -117,8 +135,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 SystemClock.elapsedRealtime() < SETTLED_UPTIME_MS
 
             try {
-                mutableReSukiSuInstalled.value = app.packageManager
-                    .getLaunchIntentForPackage("com.resukisu.resukisu") != null
+                val currentPkg = ManagerPackageStore.selectedPackage
+                mutableSelectedManager.value = currentPkg
+                mutableReSukiSuInstalled.value =
+                    app.packageManager.getLaunchIntentForPackage(currentPkg) != null
+                mutableManagerCandidates.value = detectManagerCandidates()
                 val probe = NativeProbe.run()
                 if (NativeProbe.isKernelSuActive()) {
                     mutableState.value = InstallUiState(
@@ -220,6 +241,41 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         app.startActivity(chooserIntent)
+    }
+
+    /**
+     * Scans installed packages for KernelSU manager candidates.
+     * Matches on package-name keywords; always includes the currently selected
+     * package even if it doesn't match (covers arbitrary spoofed names).
+     */
+    private fun detectManagerCandidates(): List<ManagerCandidate> {
+        val pm = app.packageManager
+        val keywords = listOf("ksu", "kernelsu", "sukisu", "suki", "superuser", "magisk")
+        val selected = ManagerPackageStore.selectedPackage
+        val seen = mutableSetOf<String>()
+        val results = mutableListOf<ManagerCandidate>()
+
+        fun addIfNew(info: ApplicationInfo) {
+            if (seen.add(info.packageName)) {
+                results += ManagerCandidate(
+                    packageName = info.packageName,
+                    label = pm.getApplicationLabel(info).toString(),
+                )
+            }
+        }
+
+        pm.getInstalledApplications(0).forEach { info ->
+            val pkg = info.packageName.lowercase()
+            if (keywords.any { pkg.contains(it) }) addIfNew(info)
+        }
+
+        // Always include the currently selected package so it shows up even if
+        // its name doesn't match any keyword.
+        runCatching {
+            pm.getApplicationInfo(selected, 0)
+        }.getOrNull()?.let { addIfNew(it) }
+
+        return results.sortedBy { it.label }
     }
 
     companion object {
