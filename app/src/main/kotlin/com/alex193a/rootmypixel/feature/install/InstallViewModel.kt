@@ -18,6 +18,7 @@ import com.alex193a.rootmypixel.domain.model.VerifiedPayloads
 import com.alex193a.rootmypixel.domain.usecase.DownloadPayloadsUseCase
 import com.alex193a.rootmypixel.domain.usecase.ResolveTargetUseCase
 import com.alex193a.rootmypixel.shizuku.ExploitService
+import com.alex193a.rootmypixel.shizuku.KernelSuDetector
 import com.alex193a.rootmypixel.shizuku.IExploitService
 import com.alex193a.rootmypixel.utils.NativeProbe
 import kotlinx.coroutines.Dispatchers
