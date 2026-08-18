@@ -105,6 +105,14 @@
       "kmi": "android14-6.1"
     },
     {
+      "profileId": "oriole-CP2A.260705.006",
+      "codename": "oriole",
+      "kernelRelease": "6.1.157-android14-11",
+      "buildDisplay": "CP2A.260705.006",
+      "exploitAsset": "exploits/oriole-CP2A.260705.006.so",
+      "kmi": "android14-6.1"
+    },
+    {
       "profileId": "akita-CP2A.260805.005",
       "codename": "akita",
       "kernelRelease": "6.1.157-android14-11",

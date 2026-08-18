@@ -87,6 +87,6 @@
     <string name="error_receipt">インストール記録を保存できません</string>
 
     <!-- Uptime warning -->
-    <string name="uptime_error_title">再起動することがあります</string>
-    <string name="uptime_error_message">このエクスプロイトは運任せの競争で、負けるとカーネルパニックで端末が再起動することがあります。想定内で害はありません（成功するまで何も書き換えません）。再起動したら、もう一度試してください。</string>
+    <string name="uptime_error_title">端末が再起動されていません</string>
+    <string name="uptime_error_message">端末が最近再起動されていません。exploit の安定性を確保するため、インストール前に再起動することを推奨します。</string>
 </resources>
