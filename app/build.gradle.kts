@@ -7,6 +7,7 @@ plugins {
 android {
     namespace = "com.alex193a.rootmypixel"
     compileSdk = 37
+    ndkVersion = "29.0.13113456"
 
     defaultConfig {
         applicationId = "com.alex193a.rootmypixel"
