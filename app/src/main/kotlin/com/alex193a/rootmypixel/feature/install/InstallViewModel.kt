@@ -23,6 +23,7 @@ import com.alex193a.rootmypixel.utils.NativeProbe
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -144,7 +145,12 @@ class InstallViewModel(application: Application) : AndroidViewModel(application)
                 phase = InstallPhase.Checking,
                 probeOutput = mutableState.value.probeOutput,
             )
+            KernelSuDetector.beginInstall()
             try {
+                // Probing is blocking, so cancel() does not stop it — join, or it
+                // tears its Shizuku service down while the exploit is running.
+                discoveryJob?.cancelAndJoin()
+
                 setPhase(InstallPhase.Checking, app.getString(R.string.status_checking))
                 val deviceInfo = NativeProbe.readDeviceSnapshot()
 
@@ -210,6 +216,8 @@ class InstallViewModel(application: Application) : AndroidViewModel(application)
                 if (error is CancellationException) throw error
                 appendLog("[-] ${error.message ?: error.javaClass.simpleName}")
                 setPhase(InstallPhase.Failed, app.getString(R.string.status_install_failed))
+            } finally {
+                KernelSuDetector.endInstall()
             }
         }
     }
@@ -403,7 +411,7 @@ class InstallViewModel(application: Application) : AndroidViewModel(application)
 
     private fun installKernelSu(payloads: VerifiedPayloads) {
         val ksudSource = payloads.kernelSu.absolutePath
-        val ksudDest = "/data/local/tmp/ksud-pixel"
+        val ksudDest = KernelSuDetector.KSUD_PATH
         val helper = File(app.applicationInfo.nativeLibraryDir, "libcve43499root.so")
 
         // 1. Wait for daemon to be ready
@@ -440,24 +448,41 @@ class InstallViewModel(application: Application) : AndroidViewModel(application)
         if (lateResult.output.isNotBlank()) {
             appendLog(lateResult.output.take(2000))
         }
-
-        // 4. Verify the module is live by asking the kernel, not by probing
-        //    paths. /dev/kernelsu, /sys/kernel/kernelsu and /data/adb/ksu are
-        //    none of them created by ReSukiSU in LKM mode, so the old check
-        //    reported failure on a device where the module had loaded and root
-        //    worked. `ksud debug info` goes through the module's own prctl
-        //    interface and answers for it; /proc/modules is the backstop.
+        
+                // 4. Verify KSU is actually loaded. ksud's kernel-side version is the
+        //    authoritative check on every KMI. Falls back to /proc/modules for
+        //    ReSukiSU LKM mode where node paths are not created, and to
+        //    node/dir probe when ksud cannot answer at all.
         var ksuInfo: String? = null
+        var ksuActive = false
         for (i in 1..10) {
+            // Primary: kernel-side version via ksud (non-zero = live).
+            val version = runHelper(helper, "-c", "$ksudDest debug version 2>/dev/null")
+            val kernelVersion = KernelSuDetector.parseKernelVersion(version.output)
+            if (kernelVersion != null) {
+                if (kernelVersion > 0) {
+                    val info = runHelper(helper, "-c", "$ksudDest debug info 2>/dev/null")
+                    appendLog("[+] KernelSU verified (attempt $i):\n${info.output.take(400)}")
+                    ksuInfo = info.output.ifBlank { "kernel version: $kernelVersion" }
+                    ksuActive = true
+                    break
+                }
+                // Definitive "not live" — do not let the fallback overrule it.
+                Thread.sleep(500)
+                continue
+            }
+            // Fallback: /proc/modules (ReSukiSU LKM) then node/dir probe.
             val check = runHelper(helper, "-c",
-                "if $ksudDest debug info 2>/dev/null | grep -qE '^version: [1-9]'; then " +
-                "$ksudDest debug info 2>/dev/null; " +
-                "elif grep -q '^kernelsu ' /proc/modules; then " +
+                "if grep -q '^kernelsu ' /proc/modules; then " +
                 "grep '^kernelsu ' /proc/modules; " +
+                "elif test -e /dev/kernelsu; then echo KSU_OK; " +
+                "elif test -e /sys/kernel/kernelsu; then echo KSU_OK; " +
+                "elif test -e /data/adb/ksu; then echo KSU_OK; " +
                 "else echo KSU_NOT_FOUND; fi")
             if (!check.output.contains("KSU_NOT_FOUND") && check.output.isNotBlank()) {
                 appendLog("[+] KernelSU verified (attempt $i):\n${check.output.take(400)}")
                 ksuInfo = check.output
+                ksuActive = true
                 break
             }
             Thread.sleep(500)
