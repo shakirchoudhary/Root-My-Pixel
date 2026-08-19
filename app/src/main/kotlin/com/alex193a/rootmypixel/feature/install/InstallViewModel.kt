@@ -10,6 +10,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.alex193a.rootmypixel.R
 import com.alex193a.rootmypixel.core.Result
+import com.alex193a.rootmypixel.data.ManagerPackageStore
 import com.alex193a.rootmypixel.domain.model.DeviceSnapshot
 import com.alex193a.rootmypixel.domain.model.InstallPhase
 import com.alex193a.rootmypixel.domain.model.InstallUiState
@@ -514,17 +515,19 @@ class InstallViewModel(application: Application) : AndroidViewModel(application)
      * a manager can also be pointed at it by hand.
      */
     private fun registerManager(helper: File, ksudDest: String) {
+        val managerPackage = ManagerPackageStore.selectedPackage
         val apkPath = runCatching {
             app.packageManager
-                .getPackageInfo(RESUKISU_PACKAGE, 0)
+                .getPackageInfo(managerPackage, 0)
                 .applicationInfo
                 ?.sourceDir
         }.getOrNull()
 
         if (apkPath.isNullOrBlank()) {
-            appendLog("[!] ReSukiSU manager not installed — skipping signature registration")
+            appendLog("[!] Manager ($managerPackage) not installed — skipping signature registration")
             return
         }
+        appendLog("[*] Registering manager: $managerPackage")
 
         appendLog("[*] Registering the ReSukiSU manager with the module...")
         val set = runHelper(helper, "-c",

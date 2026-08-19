@@ -77,7 +77,18 @@
     <string name="error_receipt">Cannot persist install receipt</string>
 
     <!-- Uptime warning -->
-    <string name="uptime_error_title">Phone not rebooted</string>
-    <string name="uptime_error_message">The phone hasn\'t been rebooted recently. Rebooting your device before installation is recommended to ensure exploit stability.</string>
+    <string name="uptime_error_title">Expect a reboot</string>
+    <string name="uptime_error_message">Winning this race is a matter of luck, and losing it can panic the kernel and reboot the phone. That is expected and harmless — nothing is written until it succeeds. If it reboots, just try again.</string>
+
+    <!-- Manager package picker -->
+    <string name="manager_card_title">Manager App</string>
+    <string name="manager_card_change">Change</string>
+    <string name="manager_picker_title">Select Manager App</string>
+    <string name="manager_picker_subtitle">Choose the app that will manage root permissions. If you installed a version with a spoofed/random package name, select it here.</string>
+    <string name="manager_picker_custom_hint">Or enter package name manually…</string>
+    <string name="manager_picker_confirm">Confirm</string>
+    <string name="manager_picker_cancel">Cancel</string>
+    <string name="manager_picker_no_candidates">No KernelSU manager apps detected. Enter the package name manually below.</string>
+    <string name="manager_not_found_warning">App not installed — registration will be skipped</string>
 </resources>
 
