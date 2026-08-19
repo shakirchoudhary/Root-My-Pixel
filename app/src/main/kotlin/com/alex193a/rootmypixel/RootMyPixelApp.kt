@@ -1,7 +1,6 @@
 package com.alex193a.rootmypixel
 
 import android.app.Application
-import androidx.compose.ui.platform.isDebugInspectorInfoEnabled
 import com.alex193a.rootmypixel.data.ManagerPackageStore
 import com.alex193a.rootmypixel.di.dataModule
 import com.alex193a.rootmypixel.di.domainModule

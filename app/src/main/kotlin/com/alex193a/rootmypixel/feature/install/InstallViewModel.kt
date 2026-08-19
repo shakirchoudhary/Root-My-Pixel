@@ -358,6 +358,11 @@ class InstallViewModel(application: Application) : AndroidViewModel(application)
                 lastRawLog = currentLog
                 lastProgressAt = SystemClock.elapsedRealtime()
             }
+            if (isSchedSetattrDead(currentLog)) {
+                appendLog("[!] sched_ok=0 — aborting running exploit")
+                handle.service.kill()
+                throw IllegalStateException(app.getString(R.string.error_sched_setattr))
+            }
             val now = SystemClock.elapsedRealtime()
             // A stall or an overall timeout still throws: those mean something
             // is wrong rather than that a race was lost, and retrying them just
@@ -385,6 +390,10 @@ class InstallViewModel(application: Application) : AndroidViewModel(application)
             }
         }
 
+        if (isSchedSetattrDead(finalLog)) {
+            throw IllegalStateException(app.getString(R.string.error_sched_setattr))
+        }
+
         if (exitCode != 0) {
             return app.getString(R.string.error_payload_exit, exitCode, "")
         }
@@ -394,6 +403,12 @@ class InstallViewModel(application: Application) : AndroidViewModel(application)
         return null
     }
 
+    /** True when the slide ran without a successful sched_setattr. Further attempts panic. */
+    private fun isSchedSetattrDead(log: String): Boolean {
+        return log.contains("slide pselect returned") &&
+            log.contains("sched_ok=0") &&
+            !log.contains("sched_ok=1")
+    }
 
     // Shizuku helpers
 
@@ -444,17 +459,19 @@ class InstallViewModel(application: Application) : AndroidViewModel(application)
 
         // 3. Execute late-load via daemon root
         appendLog("[*] Triggering KernelSU late-load (kmi=${payloads.kmi})...")
+        val managerPackage = ManagerPackageStore.selectedPackage
         val lateResult = runHelper(
             helper,
             "-c",
             "$ksudDest late-load --allow-shell --kmi ${payloads.kmi} " +
-                "--package-name com.resukisu.resukisu",
+                "--package-name '$managerPackage'",
         )
         if (lateResult.output.isNotBlank()) {
             appendLog(lateResult.output.take(2000))
-        }        // 4. Verify KSU is loaded. fd-based su probe first, then
+        }
+
+        // 4. Verify KSU is loaded. fd-based su probe first, then
         //    ksud kernel-side version, then /proc/modules as backstop.
-        var ksuInfo: String? = null
         var ksuActive = KernelSuDetector.isActive(app)
         if (ksuActive) {
             appendLog("[+] KernelSU verified through shell su interface")
@@ -467,7 +484,6 @@ class InstallViewModel(application: Application) : AndroidViewModel(application)
                 if (kernelVersion > 0) {
                     appendLog("[+] KernelSU verified (attempt $i): kernel version $kernelVersion")
                     ksuActive = true
-                    ksuInfo = "kernel version: $kernelVersion"
                     break
                 }
                 Thread.sleep(500)
@@ -478,17 +494,15 @@ class InstallViewModel(application: Application) : AndroidViewModel(application)
                 "$ksudDest debug info 2>/dev/null; " +
                 "elif grep -q '^kernelsu ' /proc/modules; then " +
                 "grep '^kernelsu ' /proc/modules; " +
-                "elif test -e /data/adb/ksu; then echo KSU_OK; " +
                 "else echo KSU_NOT_FOUND; fi")
             if (!check.output.contains("KSU_NOT_FOUND") && check.output.isNotBlank()) {
                 appendLog("[+] KernelSU verified (attempt $i):\n${check.output.take(400)}")
-                ksuInfo = check.output
                 ksuActive = true
                 break
             }
             Thread.sleep(500)
         }
-        require(ksuInfo != null) {
+        require(ksuActive) {
             app.getString(
                 R.string.error_ksu_verify,
                 lateResult.code,
@@ -525,7 +539,7 @@ class InstallViewModel(application: Application) : AndroidViewModel(application)
         val managerPackage = ManagerPackageStore.selectedPackage
         val apkPath = runCatching {
             app.packageManager
-                .getPackageInfo(managerPackage, 0)
+                .getPackageInfo(managerPackage, PackageManager.PackageInfoFlags.of(0))
                 .applicationInfo
                 ?.sourceDir
         }.getOrNull()
@@ -535,10 +549,9 @@ class InstallViewModel(application: Application) : AndroidViewModel(application)
             return
         }
         appendLog("[*] Registering manager: $managerPackage")
-
-        appendLog("[*] Registering the ReSukiSU manager with the module...")
+        val escapedPath = apkPath.replace("'", "'\\''")
         val set = runHelper(helper, "-c",
-            "$ksudDest kernel dynamic-manager set-apk '$apkPath'")
+            "$ksudDest kernel dynamic-manager set-apk '$escapedPath'")
         if (set.code != 0) {
             appendLog("[!] Manager registration failed (${set.code}): ${set.output.take(200)}")
             return
@@ -641,11 +654,6 @@ class InstallViewModel(application: Application) : AndroidViewModel(application)
         private const val MAX_LOG_CHARS = 5 * 1024 * 1024
         private val LOG_POLL_INTERVAL = 250.milliseconds
 
-        private const val RESUKISU_PACKAGE = "com.resukisu.resukisu"
-        // How many times one press will race before giving up. A lost race
-        // leaves the device running, so a retry costs only time — and once the
-        // first attempt has leaked a base, later ones skip the slide and cannot
-        // panic on it, so they are cheaper still.
         private const val EXPLOIT_ATTEMPTS = 5
         private val SLIDE_BASE = Regex("slide-kaslr-ok[^\\n]*?base=([0-9a-f]+)")
     }

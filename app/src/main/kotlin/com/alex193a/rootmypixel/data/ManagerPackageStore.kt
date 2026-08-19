@@ -13,18 +13,21 @@ object ManagerPackageStore {
     private const val PREFS_NAME = "manager_prefs"
     private const val KEY_PACKAGE = "manager_package"
 
-    private lateinit var prefs: SharedPreferences
+    @Volatile
+    private var prefs: SharedPreferences? = null
 
     fun init(context: Context) {
-        prefs = context.applicationContext
-            .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        if (prefs == null) {
+            prefs = context.applicationContext
+                .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        }
     }
 
     var selectedPackage: String
-        get() = prefs.getString(KEY_PACKAGE, DEFAULT_PACKAGE) ?: DEFAULT_PACKAGE
-        set(value) = prefs.edit().putString(KEY_PACKAGE, value.trim()).apply()
-
-    fun reset() {
-        selectedPackage = DEFAULT_PACKAGE
-    }
+        get() = prefs?.getString(KEY_PACKAGE, DEFAULT_PACKAGE) ?: DEFAULT_PACKAGE
+        set(value) {
+            val trimmed = value.trim()
+            if (trimmed.isEmpty()) return
+            prefs?.edit()?.putString(KEY_PACKAGE, trimmed)?.apply()
+        }
 }

@@ -73,6 +73,7 @@
     <string name="error_ksu_stage">Failed to stage ksud: %1$s</string>
     <string name="error_ksu_verify">ReSukiSU loader failed (%1$d): %2$s</string>
     <string name="error_shizuku_required">Shizuku is required. Install Shizuku from Google Play and grant permissions to Root My Pixel.</string>
+    <string name="error_sched_setattr">Stopped: sched_ok=0. Shizuku cannot change thread scheduling. Restart Shizuku via adb, wait until it is Running, then try once.</string>
     <string name="error_boot_id">Cannot read boot ID</string>
     <string name="error_receipt">Cannot persist install receipt</string>
 
@@ -87,7 +88,11 @@
     <string name="manager_picker_subtitle">Choose the app that will manage root permissions. If you installed a version with a spoofed/random package name, select it here.</string>
     <string name="manager_picker_confirm">Confirm</string>
     <string name="manager_picker_cancel">Cancel</string>
-    <string name="manager_picker_no_candidates">No KernelSU manager apps detected. Enter the package name manually below.</string>
+    <string name="manager_picker_suggested">Suggested</string>
+    <string name="manager_picker_all_apps">All Apps (%1$d)</string>
+    <string name="manager_picker_search">Search apps…</string>
+    <string name="manager_picker_loading">Loading…</string>
+    <string name="manager_picker_no_match">No apps match “%1$s”</string>
     <string name="manager_not_found_warning">App not installed — registration will be skipped</string>
 </resources>
 
