@@ -118,7 +118,13 @@
       "kernelRelease": "6.1.157-android14-11",
       "buildDisplay": "CP2A.260805.005",
       "exploitAsset": "exploits/akita-CP2A.260805.005.so",
-      "kmi": "android14-6.1"
+      "kmi": "android14-6.1",
+      "exploitEnv": {
+        "MAIN_TCP_ROUTE_ATTEMPTS": "4000",
+        "MAIN_TCP_CFI_ATTEMPTS_PER_PAGE": "3",
+        "MAIN_TCP_POST_GETSOCKOPT_HOLD": "35000",
+        "MAIN_TCP_ROUTE_ARM_SEQ": "20"
+      }
     }
   ]
 }

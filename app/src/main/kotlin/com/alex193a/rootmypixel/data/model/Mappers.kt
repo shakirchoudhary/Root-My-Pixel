@@ -12,4 +12,5 @@ fun BundledProfileDto.toDomain(): TargetProfile = TargetProfile(
     buildDisplay = buildDisplay,
     exploitAsset = exploitAsset,
     kmi = kmi,
+    exploitEnv = exploitEnv,
 )

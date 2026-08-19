@@ -202,7 +202,7 @@ class InstallViewModel(application: Application) : AndroidViewModel(application)
                 appendLog("[*] Using Shizuku shell access: $useShizuku")
 
                 setPhase(InstallPhase.Exploiting, app.getString(R.string.status_exploit))
-                executeExploit(payloads)
+                executeExploit(payloads, profile)
 
                 if (permissiveOnly) {
                     setPhase(InstallPhase.Installed, "SELinux permissive + root shell ready")
@@ -283,12 +283,15 @@ class InstallViewModel(application: Application) : AndroidViewModel(application)
 
     // --- Exploit execution ---
 
-    private suspend fun executeExploit(payloads: VerifiedPayloads) {
-        executeExploitViaShizuku(payloads)
+    private suspend fun executeExploit(payloads: VerifiedPayloads, profile: TargetProfile) {
+        executeExploitViaShizuku(payloads, profile)
         appendLog(app.getString(R.string.log_bootstrap_root))
     }
 
-    private suspend fun executeExploitViaShizuku(payloads: VerifiedPayloads) {
+    private suspend fun executeExploitViaShizuku(
+        payloads: VerifiedPayloads,
+        profile: TargetProfile,
+    ) {
         val helper = File(app.applicationInfo.nativeLibraryDir, "libcve43499root.so")
         require(helper.exists()) { app.getString(R.string.error_helper_unavailable) }
 
@@ -309,7 +312,12 @@ class InstallViewModel(application: Application) : AndroidViewModel(application)
                 } else {
                     appendLog("[*] exploit attempt $attempt/$EXPLOIT_ATTEMPTS")
                 }
-                val extraEnv = known?.let { "KASLR_BASE=$it" }
+                val extraEnv = buildString {
+                    profile.exploitEnv.forEach { (key, value) ->
+                        if (key.isNotBlank()) appendLine("$key=$value")
+                    }
+                    if (known != null) appendLine("KASLR_BASE=$known")
+                }.trim().ifBlank { null }
                 val failure = runExploitOnce(handle, payloads, helper, extraEnv)
                 if (failure == null) {
                     return

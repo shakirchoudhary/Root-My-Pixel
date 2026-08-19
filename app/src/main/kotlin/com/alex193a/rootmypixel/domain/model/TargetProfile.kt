@@ -13,4 +13,6 @@ data class TargetProfile(
     val exploitAsset: String,
     /** KMI tag that selects the bundled ksud binary, e.g. "android15-6.6" */
     val kmi: String,
+    /** Extra KEY=VALUE env vars passed to the payload (timing, attempt counts). */
+    val exploitEnv: Map<String, String> = emptyMap(),
 )

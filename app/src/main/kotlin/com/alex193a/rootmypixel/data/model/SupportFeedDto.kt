@@ -18,4 +18,5 @@ data class BundledProfileDto(
     val buildDisplay: String,
     val exploitAsset: String,
     val kmi: String,
+    val exploitEnv: Map<String, String> = emptyMap(),
 )
