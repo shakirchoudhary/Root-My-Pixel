@@ -504,6 +504,13 @@ class InstallViewModel(application: Application) : AndroidViewModel(application)
         //    manager shows "not installed" and can grant nothing.
         registerManager(helper, ksudDest)
 
+        // Detach ksud daemon from Shizuku so root persists after Shizuku exits.
+        // setsid creates a new process session owned by init.
+        runHelper(helper, "-c",
+            "sh -c 'setsid $ksudDest daemon --allow-root " +
+            "< /dev/null > /data/local/tmp/ksud-daemon.log 2>&1 & disown' || true"
+        )
+        appendLog("[*] ksud daemon detached from Shizuku")
         appendLog(app.getString(R.string.log_ksu_control_verified))
     }
 
