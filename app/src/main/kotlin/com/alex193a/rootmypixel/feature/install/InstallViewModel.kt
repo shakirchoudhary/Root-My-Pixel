@@ -24,6 +24,7 @@ import com.alex193a.rootmypixel.utils.NativeProbe
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -145,7 +146,12 @@ class InstallViewModel(application: Application) : AndroidViewModel(application)
                 phase = InstallPhase.Checking,
                 probeOutput = mutableState.value.probeOutput,
             )
+            KernelSuDetector.beginInstall()
             try {
+                // Probing is blocking, so cancel() does not stop it — join, or it
+                // tears its Shizuku service down while the exploit is running.
+                discoveryJob?.cancelAndJoin()
+
                 setPhase(InstallPhase.Checking, app.getString(R.string.status_checking))
                 val deviceInfo = NativeProbe.readDeviceSnapshot()
 
@@ -211,6 +217,8 @@ class InstallViewModel(application: Application) : AndroidViewModel(application)
                 if (error is CancellationException) throw error
                 appendLog("[-] ${error.message ?: error.javaClass.simpleName}")
                 setPhase(InstallPhase.Failed, app.getString(R.string.status_install_failed))
+            } finally {
+                KernelSuDetector.endInstall()
             }
         }
     }
@@ -403,7 +411,7 @@ class InstallViewModel(application: Application) : AndroidViewModel(application)
 
     private fun installKernelSu(payloads: VerifiedPayloads) {
         val ksudSource = payloads.kernelSu.absolutePath
-        val ksudDest = "/data/local/tmp/ksud-pixel"
+        val ksudDest = KernelSuDetector.KSUD_PATH
         val helper = File(app.applicationInfo.nativeLibraryDir, "libcve43499root.so")
 
         // 1. Wait for daemon to be ready
@@ -443,10 +451,8 @@ class InstallViewModel(application: Application) : AndroidViewModel(application)
         )
         if (lateResult.output.isNotBlank()) {
             appendLog(lateResult.output.take(2000))
-        }
-
-        // 4. Verify KSU is loaded. Try fd-based su probe first, then
-        //    ksud debug info via prctl, then /proc/modules as backstop.
+        }        // 4. Verify KSU is loaded. fd-based su probe first, then
+        //    ksud kernel-side version, then /proc/modules as backstop.
         var ksuInfo: String? = null
         var ksuActive = KernelSuDetector.isActive(app)
         if (ksuActive) {
@@ -454,15 +460,29 @@ class InstallViewModel(application: Application) : AndroidViewModel(application)
         }
         for (i in 1..10) {
             if (ksuActive) break
+            val version = runHelper(helper, "-c", "$ksudDest debug version 2>/dev/null")
+            val kernelVersion = KernelSuDetector.parseKernelVersion(version.output)
+            if (kernelVersion != null) {
+                if (kernelVersion > 0) {
+                    appendLog("[+] KernelSU verified (attempt $i): kernel version $kernelVersion")
+                    ksuActive = true
+                    ksuInfo = "kernel version: $kernelVersion"
+                    break
+                }
+                Thread.sleep(500)
+                continue
+            }
             val check = runHelper(helper, "-c",
                 "if $ksudDest debug info 2>/dev/null | grep -qE '^version: [1-9]'; then " +
                 "$ksudDest debug info 2>/dev/null; " +
                 "elif grep -q '^kernelsu ' /proc/modules; then " +
                 "grep '^kernelsu ' /proc/modules; " +
+                "elif test -e /data/adb/ksu; then echo KSU_OK; " +
                 "else echo KSU_NOT_FOUND; fi")
             if (!check.output.contains("KSU_NOT_FOUND") && check.output.isNotBlank()) {
                 appendLog("[+] KernelSU verified (attempt $i):\n${check.output.take(400)}")
                 ksuInfo = check.output
+                ksuActive = true
                 break
             }
             Thread.sleep(500)
