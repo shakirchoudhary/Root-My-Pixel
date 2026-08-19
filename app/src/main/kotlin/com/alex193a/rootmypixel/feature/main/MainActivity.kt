@@ -13,12 +13,15 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
@@ -28,12 +31,12 @@ import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.OpenInBrowser
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Shield
 import androidx.compose.material.icons.rounded.Warning
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -69,6 +72,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.alex193a.rootmypixel.R
@@ -92,6 +96,7 @@ class MainActivity : ComponentActivity() {
             val deviceNotSettled by installViewModel.deviceNotSettled.collectAsStateWithLifecycle()
             val selectedManager by installViewModel.selectedManager.collectAsStateWithLifecycle()
             val managerCandidates by installViewModel.managerCandidates.collectAsStateWithLifecycle()
+            val allInstalledApps by installViewModel.allInstalledApps.collectAsStateWithLifecycle()
 
             RootMyPixelTheme {
                 MainScreen(
@@ -101,6 +106,7 @@ class MainActivity : ComponentActivity() {
                     deviceNotSettled = deviceNotSettled,
                     selectedManager = selectedManager,
                     managerCandidates = managerCandidates,
+                    allInstalledApps = allInstalledApps,
                     onRefresh = { installViewModel.refresh() },
                     onInstall = { installViewModel.install() },
                     onExportLog = { installViewModel.exportLog() },
@@ -125,6 +131,7 @@ private fun MainScreen(
     deviceNotSettled: Boolean,
     selectedManager: String,
     managerCandidates: List<ManagerCandidate>,
+    allInstalledApps: List<ManagerCandidate>,
     onRefresh: () -> Unit,
     onInstall: () -> Unit,
     onExportLog: () -> Unit,
@@ -135,6 +142,7 @@ private fun MainScreen(
     if (showManagerPicker) {
         ManagerPickerDialog(
             candidates = managerCandidates,
+            allApps = allInstalledApps,
             currentPackage = selectedManager,
             onConfirm = { pkg ->
                 onSelectManager(pkg)
@@ -542,102 +550,161 @@ private fun ManagerPackageCard(
 @Composable
 private fun ManagerPickerDialog(
     candidates: List<ManagerCandidate>,
+    allApps: List<ManagerCandidate>,
     currentPackage: String,
     onConfirm: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
     var selected by remember { mutableStateOf(currentPackage) }
-    var customText by remember { mutableStateOf("") }
+    var searchQuery by remember { mutableStateOf("") }
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.manager_picker_title)) },
-        text = {
+    // Apps shown in the "All apps" section — excludes suggested ones, filtered by query
+    val suggestedPkgs = remember(candidates) { candidates.map { it.packageName }.toSet() }
+    val filteredApps = remember(allApps, searchQuery, suggestedPkgs) {
+        val q = searchQuery.trim().lowercase()
+        allApps.filter { app ->
+            app.packageName !in suggestedPkgs &&
+            (q.isEmpty() || app.label.lowercase().contains(q) || app.packageName.lowercase().contains(q))
+        }
+    }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(0.92f),
+            shape = MaterialTheme.shapes.large,
+        ) {
             Column(
-                modifier = Modifier.verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(20.dp),
             ) {
+                Text(
+                    text = stringResource(R.string.manager_picker_title),
+                    style = MaterialTheme.typography.headlineSmall,
+                )
+                Spacer(modifier = Modifier.height(8.dp))
                 Text(
                     text = stringResource(R.string.manager_picker_subtitle),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Spacer(modifier = Modifier.height(8.dp))
 
-                if (candidates.isEmpty()) {
+                if (candidates.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(12.dp))
                     Text(
-                        text = stringResource(R.string.manager_picker_no_candidates),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        text = "Suggested",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold,
                     )
-                } else {
                     candidates.forEach { candidate ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { selected = candidate.packageName },
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            RadioButton(
-                                selected = selected == candidate.packageName,
-                                onClick = { selected = candidate.packageName },
-                            )
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = candidate.label,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                                Text(
-                                    text = candidate.packageName,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontFamily = FontFamily.Monospace,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            }
-                        }
+                        AppRow(
+                            candidate = candidate,
+                            isSelected = selected == candidate.packageName,
+                            onClick = { selected = candidate.packageName },
+                        )
                     }
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
                 HorizontalDivider()
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "All Apps (${filteredApps.size})",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold,
+                )
+                Spacer(modifier = Modifier.height(6.dp))
 
                 OutlinedTextField(
-                    value = customText,
-                    onValueChange = {
-                        customText = it
-                        if (it.isNotBlank()) selected = it.trim()
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    placeholder = { Text("Search apps…", style = MaterialTheme.typography.bodySmall) },
+                    leadingIcon = {
+                        Icon(Icons.Rounded.Search, contentDescription = null, modifier = Modifier.size(18.dp))
                     },
-                    label = { Text(stringResource(R.string.manager_picker_custom_hint)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
-                    textStyle = MaterialTheme.typography.bodySmall.copy(
-                        fontFamily = FontFamily.Monospace,
-                    ),
+                    textStyle = MaterialTheme.typography.bodySmall,
                 )
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                LazyColumn(modifier = Modifier.weight(1f)) {
+                    if (filteredApps.isEmpty()) {
+                        item {
+                            Text(
+                                text = if (allApps.isEmpty()) "Loading\u2026" else "No apps match \"$searchQuery\"",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(vertical = 12.dp),
+                            )
+                        }
+                    } else {
+                        items(filteredApps, key = { it.packageName }) { candidate ->
+                            AppRow(
+                                candidate = candidate,
+                                isSelected = selected == candidate.packageName,
+                                onClick = { selected = candidate.packageName },
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text(stringResource(R.string.manager_picker_cancel))
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(
+                        onClick = { if (selected.isNotBlank()) onConfirm(selected) },
+                        enabled = selected.isNotBlank(),
+                    ) {
+                        Text(stringResource(R.string.manager_picker_confirm))
+                    }
+                }
             }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    val pkg = if (customText.isNotBlank()) customText.trim() else selected
-                    if (pkg.isNotBlank()) onConfirm(pkg)
-                },
-                enabled = selected.isNotBlank() || customText.isNotBlank(),
-            ) {
-                Text(stringResource(R.string.manager_picker_confirm))
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.manager_picker_cancel))
-            }
-        },
-    )
+        }
+    }
+}
+
+@Composable
+private fun AppRow(
+    candidate: ManagerCandidate,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        RadioButton(selected = isSelected, onClick = onClick)
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = candidate.label,
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = candidate.packageName,
+                style = MaterialTheme.typography.labelSmall,
+                fontFamily = FontFamily.Monospace,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
 }
 
 @Composable

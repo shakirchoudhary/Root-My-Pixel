@@ -50,6 +50,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val mutableDeviceNotSettled = MutableStateFlow(false)
     private val mutableSelectedManager = MutableStateFlow(ManagerPackageStore.selectedPackage)
     private val mutableManagerCandidates = MutableStateFlow<List<ManagerCandidate>>(emptyList())
+    private val mutableAllInstalledApps = MutableStateFlow<List<ManagerCandidate>>(emptyList())
     private var refreshJob: Job? = null
 
     val state: StateFlow<InstallUiState> = mutableState.asStateFlow()
@@ -58,6 +59,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val deviceNotSettled: StateFlow<Boolean> = mutableDeviceNotSettled.asStateFlow()
     val selectedManager: StateFlow<String> = mutableSelectedManager.asStateFlow()
     val managerCandidates: StateFlow<List<ManagerCandidate>> = mutableManagerCandidates.asStateFlow()
+    val allInstalledApps: StateFlow<List<ManagerCandidate>> = mutableAllInstalledApps.asStateFlow()
 
     fun selectManagerPackage(packageName: String) {
         ManagerPackageStore.selectedPackage = packageName
@@ -133,6 +135,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 mutableReSukiSuInstalled.value =
                     app.packageManager.getLaunchIntentForPackage(currentPkg) != null
                 mutableManagerCandidates.value = detectManagerCandidates()
+                mutableAllInstalledApps.value = detectAllInstalledApps()
                 val probe = NativeProbe.run()
                 if (NativeProbe.isKernelSuActive() || KernelSuDetector.isActive(app)) {
                     mutableState.value = InstallUiState(
@@ -257,9 +260,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
-        pm.getInstalledApplications(0).forEach { info ->
+        pm.getInstalledApplications(PackageManager.ApplicationInfoFlags.of(0)).forEach { info ->
             val pkg = info.packageName.lowercase()
-            if (keywords.any { pkg.contains(it) }) addIfNew(info)
+            val label = pm.getApplicationLabel(info).toString().lowercase()
+            if (keywords.any { pkg.contains(it) || label.contains(it) }) addIfNew(info)
         }
 
         // Always include the currently selected package so it shows up even if
@@ -269,6 +273,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }.getOrNull()?.let { addIfNew(it) }
 
         return results.sortedBy { it.label }
+    }
+
+    /** Returns every launchable app sorted by label. */
+    private fun detectAllInstalledApps(): List<ManagerCandidate> {
+        val pm = app.packageManager
+        val launcher = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+        return pm.queryIntentActivities(
+            launcher,
+            PackageManager.ResolveInfoFlags.of(0),
+        )
+            .map { ri ->
+                ManagerCandidate(
+                    packageName = ri.activityInfo.packageName,
+                    label = ri.loadLabel(pm).toString(),
+                )
+            }
+            .distinctBy { it.packageName }
+            .sortedBy { it.label.lowercase() }
     }
 
     companion object {

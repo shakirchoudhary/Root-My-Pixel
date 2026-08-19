@@ -85,7 +85,6 @@
     <string name="manager_card_change">Change</string>
     <string name="manager_picker_title">Select Manager App</string>
     <string name="manager_picker_subtitle">Choose the app that will manage root permissions. If you installed a version with a spoofed/random package name, select it here.</string>
-    <string name="manager_picker_custom_hint">Or enter package name manually…</string>
     <string name="manager_picker_confirm">Confirm</string>
     <string name="manager_picker_cancel">Cancel</string>
     <string name="manager_picker_no_candidates">No KernelSU manager apps detected. Enter the package name manually below.</string>
